@@ -1,6 +1,1 @@
-main.py
-requirements.txt
-runtime.txt
-index.html
-movies.json
-users.json
+python-3.10.12
