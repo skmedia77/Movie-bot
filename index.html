@@ -1,1 +1,37 @@
-a
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>SK Media Movies</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+body{background:#111;color:white;font-family:sans-serif;text-align:center}
+.card{background:#1c1c1c;margin:15px;padding:15px;border-radius:12px;display:inline-block;width:200px}
+img{width:140px;border-radius:10px}
+a{color:#22c55e;text-decoration:none;font-size:16px}
+</style>
+</head>
+<body>
+
+<h1>🎬 SK Media Movies</h1>
+<div id="movies"></div>
+
+<script>
+fetch("https://YOUR-RENDER-URL.onrender.com/movies")
+.then(res=>res.json())
+.then(data=>{
+ let html="";
+ data.reverse().forEach(m=>{
+  html+=`
+   <div class="card">
+     <img src="${m.poster}">
+     <h3>${m.name}</h3>
+     <a href="${m.link}" target="_blank">▶ Watch Now</a>
+   </div>`;
+ });
+ document.getElementById("movies").innerHTML=html;
+});
+</script>
+
+</body>
+  </html>
