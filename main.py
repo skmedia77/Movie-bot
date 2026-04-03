@@ -1,108 +1,122 @@
 import json
 import os
-from flask import Flask, jsonify
-from telegram.ext import Updater, CommandHandler
+from flask import Flask, send_file
+from telegram import Update
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
 TOKEN = os.environ.get("BOT_TOKEN")
-ADMIN_ID = int(os.environ.get("ADMIN_ID"))
 
 app = Flask(__name__)
 
-MOVIE_DB = "movies.json"
-USER_DB = "users.json"
+MOVIES_FILE = "movies.json"
+USERS_FILE = "users.json"
 
-# create db files if not exist
-for file in [MOVIE_DB, USER_DB]:
-    if not os.path.exists(file):
-        with open(file, "w") as f:
-            json.dump([], f)
 
-def load_json(file):
-    with open(file, "r") as f:
-        return json.load(f)
-
-def save_json(file, data):
-    with open(file, "w") as f:
-        json.dump(data, f, indent=4)
-
-def is_admin(update):
-    return update.message.from_user.id == ADMIN_ID
-
-def save_user(user_id):
-    users = load_json(USER_DB)
-    if user_id not in users:
-        users.append(user_id)
-        save_json(USER_DB, users)
-
-# -------- BOT COMMANDS --------
-
-def start(update, context):
-    save_user(update.message.from_user.id)
-    update.message.reply_text("🎬 Welcome to SK Media! Open menu to view movies")
-
-def add_movie(update, context):
-    if not is_admin(update):
-        update.message.reply_text("❌ Admin only!")
-        return
+def load_movies():
     try:
-        text = update.message.text.replace("/addmovie ", "")
-        name, poster, link = text.split("|")
-        movies = load_json(MOVIE_DB)
-        movies.append({"name": name.strip(), "poster": poster.strip(), "link": link.strip()})
-        save_json(MOVIE_DB, movies)
-        update.message.reply_text("✅ Movie Added")
+        with open(MOVIES_FILE, "r") as f:
+            return json.load(f)
     except:
-        update.message.reply_text("Use:\n/addmovie Name | Poster | Link")
+        return []
 
-def broadcast(update, context):
-    if not is_admin(update):
-        return
-    msg = update.message.text.replace("/broadcast ", "")
-    users = load_json(USER_DB)
-    sent = 0
-    for u in users:
-        try:
-            context.bot.send_message(chat_id=u, text=msg)
-            sent += 1
-        except:
-            pass
-    update.message.reply_text(f"📢 Broadcast sent to {sent} users")
 
-def stats(update, context):
-    if not is_admin(update):
-        return
-    update.message.reply_text(
-        f"Users: {len(load_json(USER_DB))}\nMovies: {len(load_json(MOVIE_DB))}"
-    )
+def save_movies(data):
+    with open(MOVIES_FILE, "w") as f:
+        json.dump(data, f)
 
-# -------- START POLLING --------
-def start_bot():
-    updater = Updater(TOKEN, use_context=True)
-    dp = updater.dispatcher
 
-    dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(CommandHandler("addmovie", add_movie))
-    dp.add_handler(CommandHandler("broadcast", broadcast))
-    dp.add_handler(CommandHandler("stats", stats))
+def load_users():
+    try:
+        with open(USERS_FILE, "r") as f:
+            return json.load(f)
+    except:
+        return []
 
-    updater.start_polling()
-    updater.idle()
 
-# -------- MINI APP API --------
-@app.route("/movies")
-def movies():
-    return jsonify(load_json(MOVIE_DB))
+def save_users(data):
+    with open(USERS_FILE, "w") as f:
+        json.dump(data, f)
 
-@app.route("/users")
-def users():
-    return jsonify({"total_users": len(load_json(USER_DB))})
 
+# ওয়েব হোম
 @app.route("/")
 def home():
-    return "SK Media Running 🚀"
+    return "SK MEDIA BOT RUNNING"
 
-# Run bot + flask together
+
+@app.route("/app")
+def mini_app():
+    return send_file("index.html")
+
+
+# /start command
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    users = load_users()
+
+    if user_id not in users:
+        users.append(user_id)
+        save_users(users)
+
+    await update.message.reply_text("Welcome to SK Media 🎬")
+
+
+# movie add
+async def addmovie(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = " ".join(context.args)
+    if text == "":
+        await update.message.reply_text("Use: /addmovie Movie Name")
+        return
+
+    movies = load_movies()
+    movies.append(text)
+    save_movies(movies)
+
+    await update.message.reply_text("Movie Added ✅")
+
+
+# movie list
+async def movies(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    movies = load_movies()
+
+    if not movies:
+        await update.message.reply_text("No movies yet")
+        return
+
+    msg = "🎬 Movie List:\n\n"
+    for m in movies:
+        msg += f"• {m}\n"
+
+    await update.message.reply_text(msg)
+
+
+# broadcast
+async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != int(os.environ.get("ADMIN_ID")):
+        return
+
+    text = " ".join(context.args)
+    users = load_users()
+
+    for user in users:
+        try:
+            await context.bot.send_message(user, text)
+        except:
+            pass
+
+    await update.message.reply_text("Broadcast sent ✅")
+
+
+def run_bot():
+    application = ApplicationBuilder().token(TOKEN).build()
+
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("addmovie", addmovie))
+    application.add_handler(CommandHandler("movies", movies))
+    application.add_handler(CommandHandler("broadcast", broadcast))
+
+    application.run_polling()
+
+
 if __name__ == "__main__":
-    from threading import Thread
-    Thread(target=start_bot).start()
-    app.run(host="0.0.0.0", port=10000)
+    run_bot()
