@@ -1,37 +1,136 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>SK Media Movies</title>
-<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SK Media</title>
+
+<!-- Monetag Ad Script -->
+<script src='//libtl.com/sdk.js' data-zone='10831174' data-sdk='show_10831174'></script>
+
 <style>
-body{background:#111;color:white;font-family:sans-serif;text-align:center}
-.card{background:#1c1c1c;margin:15px;padding:15px;border-radius:12px;display:inline-block;width:200px}
-img{width:140px;border-radius:10px}
-a{color:#22c55e;text-decoration:none;font-size:16px}
+body{
+  background:#0f0f0f;
+  color:white;
+  font-family:Arial;
+  margin:0;
+}
+
+.header{
+  background:#111;
+  padding:15px;
+  text-align:center;
+  font-size:24px;
+  font-weight:bold;
+}
+
+.search{
+  padding:15px;
+  text-align:center;
+}
+
+.search input{
+  width:90%;
+  padding:10px;
+  border-radius:8px;
+  border:none;
+}
+
+.movies{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(160px,1fr));
+  gap:15px;
+  padding:15px;
+}
+
+.movie{
+  background:#1c1c1c;
+  border-radius:10px;
+  overflow:hidden;
+  text-align:center;
+}
+
+.movie img{
+  width:100%;
+  height:230px;
+  object-fit:cover;
+}
+
+.movie h3{
+  padding:10px;
+  font-size:16px;
+}
+
+.category{
+  color:#aaa;
+  font-size:13px;
+}
+
+button{
+  background:red;
+  color:white;
+  border:none;
+  padding:10px;
+  margin:10px;
+  border-radius:6px;
+  cursor:pointer;
+}
 </style>
 </head>
+
 <body>
 
-<h1>🎬 SK Media Movies</h1>
-<div id="movies"></div>
+<div class="header">🎬 SK Media Movies</div>
+
+<div class="search">
+  <input type="text" id="searchBox" placeholder="Search movies..." onkeyup="searchMovie()">
+</div>
+
+<div class="movies" id="movies"></div>
 
 <script>
-fetch("https://movie-bot-kd4g.onrender.com/movies")
+let allMovies = [];
+
+// Load movies from API
+fetch("/movies")
 .then(res=>res.json())
 .then(data=>{
- let html="";
- data.reverse().forEach(m=>{
-  html+=`
-   <div class="card">
-     <img src="${m.poster}">
-     <h3>${m.name}</h3>
-     <a href="${m.link}" target="_blank">▶ Watch Now</a>
-   </div>`;
- });
- document.getElementById("movies").innerHTML=html;
+  allMovies = data;
+  showMovies(data);
 });
+
+function showMovies(movies){
+  let html="";
+  movies.forEach(movie=>{
+    html+=`
+      <div class="movie">
+        <img src="${movie.poster}">
+        <h3>${movie.title}</h3>
+        <div class="category">${movie.category}</div>
+        <button onclick="unlockMovie('${movie.link}')">Watch Movie</button>
+      </div>`;
+  });
+  document.getElementById("movies").innerHTML = html;
+}
+
+// Search system
+function searchMovie(){
+  let value = document.getElementById("searchBox").value.toLowerCase();
+  let filtered = allMovies.filter(m=>m.title.toLowerCase().includes(value));
+  showMovies(filtered);
+}
+
+// Monetag Ad Unlock
+function unlockMovie(url){
+  if(typeof show_10831174 === 'function'){
+    show_10831174().then(()=>{
+      window.open(url,"_blank");
+    });
+  }else{
+    alert("Ad not loaded. Try again.");
+  }
+}
 </script>
 
 </body>
-  </html>
+ </html>
