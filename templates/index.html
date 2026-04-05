@@ -1,80 +1,31 @@
-<!DOCTYPE html>
+  <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SK Media</title>
+<title>SK Media - Unlock Movie</title>
 
-<!-- Monetag Ad Script -->
 <script src='//libtl.com/sdk.js' data-zone='10831174' data-sdk='show_10831174'></script>
 
 <style>
-body{
-  background:#0f0f0f;
-  color:white;
-  font-family:Arial;
-  margin:0;
-}
+body { background: #0f0f0f; color: white; font-family: 'Segoe UI', Arial, sans-serif; margin: 0; }
+.header { background: #111; padding: 20px; text-align: center; font-size: 24px; font-weight: bold; border-bottom: 2px solid #ff0000; }
+.search { padding: 15px; text-align: center; }
+.search input { width: 90%; padding: 12px; border-radius: 25px; border: 1px solid #333; background: #222; color: white; outline: none; }
 
-.header{
-  background:#111;
-  padding:15px;
-  text-align:center;
-  font-size:24px;
-  font-weight:bold;
-}
+.movies { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 15px; padding: 15px; }
+.movie { background: #1c1c1c; border-radius: 12px; overflow: hidden; text-align: center; transition: 0.3s; border: 1px solid #222; }
+.movie:hover { transform: scale(1.03); border-color: #ff0000; }
+.movie img { width: 100%; height: 230px; object-fit: cover; }
+.movie h3 { padding: 10px 5px 2px 5px; font-size: 15px; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.category { color: #888; font-size: 12px; margin-bottom: 10px; }
 
-.search{
-  padding:15px;
-  text-align:center;
-}
+button { background: linear-gradient(45deg, #ff0000, #b30000); color: white; border: none; padding: 10px 20px; margin-bottom: 15px; border-radius: 20px; cursor: pointer; font-weight: bold; width: 80%; }
 
-.search input{
-  width:90%;
-  padding:10px;
-  border-radius:8px;
-  border:none;
-}
-
-.movies{
-  display:grid;
-  grid-template-columns:repeat(auto-fill,minmax(160px,1fr));
-  gap:15px;
-  padding:15px;
-}
-
-.movie{
-  background:#1c1c1c;
-  border-radius:10px;
-  overflow:hidden;
-  text-align:center;
-}
-
-.movie img{
-  width:100%;
-  height:230px;
-  object-fit:cover;
-}
-
-.movie h3{
-  padding:10px;
-  font-size:16px;
-}
-
-.category{
-  color:#aaa;
-  font-size:13px;
-}
-
-button{
-  background:red;
-  color:white;
-  border:none;
-  padding:10px;
-  margin:10px;
-  border-radius:6px;
-  cursor:pointer;
-}
+/* Progress Overlay */
+#adOverlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 1000; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+.progress-container { width: 80%; background: #333; height: 10px; border-radius: 5px; margin: 20px 0; }
+.progress-bar { width: 0%; height: 100%; background: #ff0000; border-radius: 5px; transition: 0.5s; }
 </style>
 </head>
 
@@ -86,51 +37,100 @@ button{
   <input type="text" id="searchBox" placeholder="Search movies..." onkeyup="searchMovie()">
 </div>
 
+<div id="adOverlay">
+  <h2 id="statusTitle">Unlocking Movie...</h2>
+  <p id="statusDesc">Please watch 5 ads to unlock the link</p>
+  <div class="progress-container">
+    <div class="progress-bar" id="progressBar"></div>
+  </div>
+  <p id="adCounter">Ads Seen: 0/5</p>
+  <button onclick="triggerAd()" id="nextAdBtn">Watch Ad</button>
+</div>
+
 <div class="movies" id="movies"></div>
 
 <script>
 let allMovies = [];
+let currentAdsSeen = 0;
+const REQUIRED_ADS = 5;
+let pendingUrl = "";
 
-// Load movies from API
+// ১. মুভি লোড করা
 fetch("/movies")
-.then(res=>res.json())
-.then(data=>{
+.then(res => res.json())
+.then(data => {
   allMovies = data;
   showMovies(data);
 });
 
-function showMovies(movies){
-  let html="";
-  movies.forEach(movie=>{
-    html+=`
+function showMovies(movies) {
+  let html = "";
+  if(movies.length === 0) html = "<p style='text-align:center; width:100%'>No movies found!</p>";
+  movies.forEach(movie => {
+    html += `
       <div class="movie">
-        <img src="${movie.poster}">
+        <img src="${movie.poster}" onerror="this.src='https://via.placeholder.com/230x300?text=No+Poster'">
         <h3>${movie.title}</h3>
         <div class="category">${movie.category}</div>
-        <button onclick="unlockMovie('${movie.link}')">Watch Movie</button>
+        <button onclick="startUnlock('${movie.link}')">Watch Now</button>
       </div>`;
   });
   document.getElementById("movies").innerHTML = html;
 }
 
-// Search system
-function searchMovie(){
+// ২. সার্চ সিস্টেম
+function searchMovie() {
   let value = document.getElementById("searchBox").value.toLowerCase();
-  let filtered = allMovies.filter(m=>m.title.toLowerCase().includes(value));
+  let filtered = allMovies.filter(m => m.title.toLowerCase().includes(value));
   showMovies(filtered);
 }
 
-// Monetag Ad Unlock
-function unlockMovie(url){
-  if(typeof show_10831174 === 'function'){
-    show_10831174().then(()=>{
-      window.open(url,"_blank");
+// ৩. আনলক প্রসেস শুরু
+function startUnlock(url) {
+  pendingUrl = url;
+  currentAdsSeen = 0;
+  updateUI();
+  document.getElementById("adOverlay").style.display = "flex";
+}
+
+// ৪. অ্যাড ট্রিগার করা
+function triggerAd() {
+  if (typeof show_10831174 === 'function') {
+    const btn = document.getElementById("nextAdBtn");
+    btn.disabled = true;
+    btn.innerText = "Loading Ad...";
+
+    show_10831174().then(() => {
+      currentAdsSeen++;
+      updateUI();
+      btn.disabled = false;
+      btn.innerText = "Watch Next Ad";
+
+      if (currentAdsSeen >= REQUIRED_ADS) {
+        finishUnlock();
+      }
+    }).catch(err => {
+      alert("Ad failed to load. Please try again.");
+      btn.disabled = false;
     });
-  }else{
-    alert("Ad not loaded. Try again.");
+  } else {
+    alert("Ad Blocker detected or SDK not loaded!");
   }
 }
-</script>
 
-</body>
- </html>
+// ৫. UI আপডেট করা
+function updateUI() {
+  let percent = (currentAdsSeen / REQUIRED_ADS) * 100;
+  document.getElementById("progressBar").style.width = percent + "%";
+  document.getElementById("adCounter").innerText = `Ads Seen: ${currentAdsSeen}/${REQUIRED_ADS}`;
+}
+
+// ৬. আনলক শেষ করা
+function finishUnlock() {
+  document.getElementById("statusTitle").innerText = "Unlocked! ✅";
+  document.getElementById("statusDesc").innerText = "Redirecting to your movie...";
+  setTimeout(() => {
+    document.getElementById("adOverlay").style.display = "none";
+    window.open(pendingUrl, "_blank");
+  }, 1500);
+}
