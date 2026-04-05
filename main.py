@@ -5,9 +5,9 @@ from flask import Flask, render_template, jsonify
 from telegram import Update, WebAppInfo, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Updater, CommandHandler, CallbackContext, CallbackQueryHandler
 
-# ========= ENV =========
+# ========= কনফিগারেশন (ENV) =========
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-ADMIN_ID = os.getenv("ADMIN_ID")
+ADMIN_ID = os.getenv("ADMIN_ID") # এটি স্ট্রিং হিসেবে আসবে
 WEB_APP_URL = os.getenv("WEB_APP_URL")
 CHANNEL_USERNAME = "@skkmediabd"
 
@@ -16,127 +16,93 @@ USER_FILE = "users.json"
 
 app = Flask(__name__)
 
-# Helper function to read/write JSON safely
-def load_json(filename, default=[]):
-    if not os.path.exists(filename):
-        return default
-    with open(filename, "r", encoding="utf-8") as f:
-        return json.load(f)
+# --- ডাটাবেস ফাংশন ---
+def load_data(file):
+    if not os.path.exists(file): return []
+    with open(file, "r", encoding="utf-8") as f:
+        try: return json.load(f)
+        except: return []
 
-def save_json(filename, data):
-    with open(filename, "w", encoding="utf-8") as f:
+def save_data(file, data):
+    with open(file, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=4, ensure_ascii=False)
 
-# ========= FLASK ROUTES =========
+# ========= FLASK ROUTES (ওয়েবসাইট) =========
 @app.route("/")
 def home():
     return "SK Media Bot is Running 🚀"
 
+@app.route("/app")
+def webapp():
+    return render_template("index.html")
+
 @app.route("/movies")
 def movies_api():
-    return jsonify(load_json(MOVIE_FILE))
+    return jsonify(load_data(MOVIE_FILE))
 
-# ========= FORCE JOIN CHECK =========
+# ========= BOT LOGIC =========
 def is_user_joined(bot, user_id):
     try:
         member = bot.get_chat_member(CHANNEL_USERNAME, user_id)
         return member.status in ["member", "creator", "administrator"]
-    except Exception:
-        return False
+    except: return False
 
-# ========= START COMMAND =========
 def start(update: Update, context: CallbackContext):
     user_id = update.effective_user.id
-    user_id_str = str(user_id)
+    
+    # ইউজার সেভ
+    users = load_data(USER_FILE)
+    if str(user_id) not in users:
+        users.append(str(user_id))
+        save_data(USER_FILE, users)
 
-    # Force Join
     if not is_user_joined(context.bot, user_id):
         join_btn = [
-            [InlineKeyboardButton("📢 Join Channel", url=f"https://t.me/{CHANNEL_USERNAME.replace('@','')}")],
+            [InlineKeyboardButton("📢 Join Channel", url=f"https://t.me/{CHANNEL_USERNAME[1:]}")],
             [InlineKeyboardButton("✅ Joined", callback_data="check_join")]
         ]
-        update.message.reply_text(
-            "Mini App ব্যবহার করতে আগে আমাদের চ্যানেলে join করুন 👇",
-            reply_markup=InlineKeyboardMarkup(join_btn)
-        )
+        update.message.reply_text("Mini App ব্যবহার করতে আগে Channel join করুন 👇", reply_markup=InlineKeyboardMarkup(join_btn))
         return
 
-    # Save user effectively
-    users = load_json(USER_FILE)
-    if user_id_str not in users:
-        users.append(user_id_str)
-        save_json(USER_FILE, users)
+    # ওপেন অ্যাপ বাটন (সরাসরি /app রাউটে পাঠাবে)
+    webapp_final_url = f"{WEB_APP_URL}/app"
+    keyboard = [[InlineKeyboardButton("🎬 Movie দেখুন", web_app=WebAppInfo(url=webapp_final_url))]]
+    update.message.reply_text(f"Welcome to SK Media 🍿", reply_markup=InlineKeyboardMarkup(keyboard))
 
-    # Open Mini App Button
-    web_app_info = WebAppInfo(url=WEB_APP_URL)
-    keyboard = [[InlineKeyboardButton("🎬 Open SK Media", web_app=web_app_info)]]
-
-    update.message.reply_text(
-        "Welcome to SK Media 🍿\nনিচের বাটনে ক্লিক করে মুভি এনজয় করুন!",
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
-
-# ========= JOIN CONFIRM BUTTON =========
 def check_join(update: Update, context: CallbackContext):
     query = update.callback_query
-    user_id = query.from_user.id
-
-    if is_user_joined(context.bot, user_id):
-        web_app_info = WebAppInfo(url=WEB_APP_URL)
-        keyboard = [[InlineKeyboardButton("🎬 Open SK Media", web_app=web_app_info)]]
-        
-        query.edit_message_text(
-            "ধন্যবাদ! এখন App ব্যবহার করতে পারো ✅",
-            reply_markup=InlineKeyboardMarkup(keyboard)
-        )
+    if is_user_joined(context.bot, query.from_user.id):
+        webapp_final_url = f"{WEB_APP_URL}/app"
+        query.edit_message_text("ধন্যবাদ! এখন মুভি দেখুন ✅", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🎬 Open App", web_app=WebAppInfo(url=webapp_final_url))]]))
     else:
-        query.answer("আপনি এখনো join করেননি! ❌", show_alert=True)
+        query.answer("এখনো join করো নাই ❌", show_alert=True)
 
-# ========= ADMIN: ADD MOVIE =========
 def add_movie(update: Update, context: CallbackContext):
-    if str(update.effective_user.id) != ADMIN_ID:
-        update.message.reply_text("আপনি এডমিন নন! ❌")
-        return
-
+    if str(update.effective_user.id) != ADMIN_ID: return
     try:
-        # Example: /addmovie Inception | https://image.jpg | https://movie.com | Action
-        raw_text = update.message.text.split(None, 1)[1]
-        parts = [p.strip() for p in raw_text.split("|")]
-        
-        if len(parts) != 4:
-            raise ValueError
-
-        new_movie = {
-            "title": parts[0],
-            "poster": parts[1],
-            "link": parts[2],
-            "category": parts[3]
-        }
-
-        movies = load_json(MOVIE_FILE)
-        movies.append(new_movie)
-        save_json(MOVIE_FILE, movies)
-
+        data = update.message.text.replace("/addmovie ", "")
+        parts = [p.strip() for p in data.split("|")]
+        movie = {"title": parts[0], "poster": parts[1], "link": parts[2], "category": parts[3]}
+        movies = load_data(MOVIE_FILE)
+        movies.append(movie)
+        save_data(MOVIE_FILE, movies)
         update.message.reply_text("Movie Added Successfully 🎬")
-    except:
-        update.message.reply_text("সঠিক ফরম্যাট ব্যবহার করুন:\n/addmovie Name | Poster | Link | Category")
+    except: update.message.reply_text("Use: /addmovie Name | Poster | Link | Category")
 
-# ========= RUN BOT & FLASK =========
+# ========= RUNNING ENGINE =========
+def run_flask():
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
+
 def run_bot():
     updater = Updater(BOT_TOKEN)
     dp = updater.dispatcher
-
     dp.add_handler(CommandHandler("start", start))
     dp.add_handler(CommandHandler("addmovie", add_movie))
-    dp.add_handler(CommandHandler("broadcast", broadcast)) # broadcast function definition keeping previous logic
     dp.add_handler(CallbackQueryHandler(check_join, pattern="check_join"))
-
     updater.start_polling()
     updater.idle()
 
 if __name__ == "__main__":
-    # Flask thread
-    threading.Thread(target=run_bot, daemon=True).start()
-    # Flask host config for Render/Replit
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port)
+    threading.Thread(target=run_flask).start()
+    run_bot()
