@@ -1,83 +1,99 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="bn">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SK Media</title>
-<script src='//libtl.com/sdk.js' data-zone='10831174' data-sdk='show_10831174'></script>
-<style>
-    body { background:#0f0f0f; color:white; font-family:Arial; margin:0; padding-bottom: 20px; }
-    .header { background:#111; padding:15px; text-align:center; font-size:22px; font-weight:bold; border-bottom: 2px solid red; }
-    .search { padding:15px; text-align:center; }
-    .search input { width:85%; padding:12px; border-radius:20px; border:none; background:#222; color:white; }
-    .movies { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:15px; padding:15px; }
-    .movie { background:#1c1c1c; border-radius:10px; overflow:hidden; text-align:center; border:1px solid #333; }
-    .movie img { width:100%; height:220px; object-fit:cover; }
-    .movie h3 { font-size:14px; padding:8px 5px; margin:0; height:35px; overflow:hidden; }
-    button { background:red; color:white; border:none; padding:10px; margin:10px; border-radius:5px; cursor:pointer; width:80%; font-weight:bold; }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Viral Movie Hub</title>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
     
-    #adOverlay { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.95); z-index:9999; flex-direction:column; align-items:center; justify-content:center; }
-    .prog-bg { width:70%; background:#333; height:10px; border-radius:5px; margin:15px; }
-    .prog-bar { width:0%; height:100%; background:red; border-radius:5px; transition:0.3s; }
-</style>
+    <script src='//libtl.com/sdk.js' data-zone='10831174' data-sdk='show_10831174'></script>
+
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: linear-gradient(180deg, #0f0f17 0%, #1a1a2e 100%); color: white; margin: 0; padding: 15px; min-height: 100vh; }
+        .header { text-align: center; padding: 20px; background: rgba(255, 255, 255, 0.05); border-radius: 15px; backdrop-filter: blur(10px); margin-bottom: 25px; border: 1px solid rgba(255, 255, 255, 0.1); }
+        .header h2 { margin: 0; font-size: 1.6rem; color: #00d2ff; }
+        .movie-card { background: rgba(30, 30, 45, 0.95); border-radius: 16px; padding: 15px; margin-bottom: 20px; border: 1px solid rgba(0, 210, 255, 0.2); box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5); overflow: hidden; }
+        .movie-img { width: 100%; height: auto; border-radius: 12px; margin-bottom: 12px; object-fit: cover; }
+        .movie-title { font-size: 1.15rem; font-weight: bold; color: #ffffff; margin-bottom: 5px; }
+        .movie-type { display: inline-block; font-size: 0.75rem; background: #3a7bd5; padding: 4px 10px; border-radius: 20px; margin-bottom: 15px; }
+        .watch-btn { display: block; width: 100%; text-align: center; background: linear-gradient(135deg, #00c6ff 0%, #0072ff 100%); color: white; padding: 14px; border-radius: 10px; text-decoration: none; font-weight: bold; border: none; cursor: pointer; transition: 0.2s; }
+        .watch-btn:active { transform: scale(0.98); }
+        .unlock-txt { font-size: 0.85rem; color: #ffcc00; text-align: center; margin-bottom: 10px; }
+    </style>
 </head>
 <body>
 
-<div class="header">🎬 SK Media Movies</div>
-<div class="search"><input type="text" id="searchBox" placeholder="Search movies..." onkeyup="searchMovie()"></div>
+    <div class="header">
+        <h2>🎬 Viral Movie Hub</h2>
+        <p style="color: #aaa; font-size: 0.8rem;">লেটেস্ট মুভি ও ড্রামা কালেকশন</p>
+    </div>
 
-<div id="adOverlay">
-    <h2 id="adStatus">Unlocking Movie...</h2>
-    <div class="prog-bg"><div class="prog-bar" id="pBar"></div></div>
-    <p id="adCountText">Ads Seen: 0/5</p>
-    <button onclick="playAd()" id="adBtn">Watch Ad</button>
-</div>
+    <div id="content-container">
+        </div>
 
-<div class="movies" id="movies"></div>
+    <script>
+        // Firebase Configuration (পছন্দমতো আপনার ডাটা বসান)
+        const firebaseConfig = {
+            apiKey: "YOUR_API_KEY",
+            projectId: "YOUR_PROJECT_ID",
+            appId: "YOUR_APP_ID"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
 
-<script>
-let allMovies = [];
-let adsSeen = 0;
-let targetUrl = "";
+        const requiredAds = 5;
+        let adCounts = {}; 
 
-fetch("/movies").then(res=>res.json()).then(data=>{ allMovies=data; showMovies(data); });
+        // ডাটাবেজ থেকে মুভি নিয়ে আসা
+        db.collection("movies").orderBy("timestamp", "desc").onSnapshot((snapshot) => {
+            const container = document.getElementById('content-container');
+            container.innerHTML = "";
+            snapshot.forEach((doc) => {
+                const item = doc.data();
+                const id = doc.id;
+                adCounts[id] = 0;
 
-function showMovies(movies){
-    let html="";
-    movies.forEach(m=>{
-        html+=`<div class="movie"><img src="${m.poster}"><h3>${m.title}</h3><button onclick="startUnlock('${m.link}')">Watch Now</button></div>`;
-    });
-    document.getElementById("movies").innerHTML = html || "<p>No movies found</p>";
-}
+                container.innerHTML += `
+                    <div class="movie-card">
+                        ${item.image ? `<img src="${item.image}" class="movie-img" alt="Poster">` : ''}
+                        <div class="movie-title">${item.title}</div>
+                        <div class="movie-type">${item.category}</div>
+                        
+                        <div id="lock-${id}">
+                            <p class="unlock-txt">মুভিটি আনলক করতে ৫টি অ্যাড দেখুন</p>
+                            <button class="watch-btn" style="background:#444;" onclick="handleAdClick('${id}')">
+                                অ্যাড দেখুন (<span id="count-${id}">0</span>/${requiredAds})
+                            </button>
+                        </div>
 
-function searchMovie(){
-    let val = document.getElementById("searchBox").value.toLowerCase();
-    showMovies(allMovies.filter(m=>m.title.toLowerCase().includes(val)));
-}
+                        <div id="link-${id}" style="display:none;">
+                            <button class="watch-btn" onclick="window.open('${item.link}', '_blank')">🚀 এখনই দেখুন</button>
+                        </div>
+                    </div>
+                `;
+            });
+        });
 
-function startUnlock(url){
-    targetUrl = url; adsSeen = 0; updateUI();
-    document.getElementById("adOverlay").style.display = "flex";
-}
-
-function playAd(){
-    if(typeof show_10831174 === 'function'){
-        document.getElementById("adBtn").innerText = "Loading...";
-        show_10831174().then(()=>{
-            adsSeen++; updateUI();
-            document.getElementById("adBtn").innerText = "Watch Next Ad";
-            if(adsSeen >= 5){
-                document.getElementById("adStatus").innerText = "Unlocked! ✅";
-                setTimeout(()=>{ window.open(targetUrl, "_blank"); document.getElementById("adOverlay").style.display="none"; }, 1000);
+        function handleAdClick(id) {
+            // মনিট্যাগ SDK কল
+            if (typeof show_10831174 === 'function') {
+                show_10831174().then(() => {
+                    updateCounter(id);
+                });
+            } else {
+                updateCounter(id); 
             }
-        }).catch(()=>{ alert("Ad failed. Try again."); document.getElementById("adBtn").innerText = "Watch Ad"; });
-    }
-}
+        }
 
-function updateUI(){
-    document.getElementById("pBar").style.width = (adsSeen/5)*100 + "%";
-    document.getElementById("adCountText").innerText = `Ads Seen: ${adsSeen}/5`;
-}
-</script>
+        function updateCounter(id) {
+            adCounts[id]++;
+            document.getElementById(`count-${id}`).innerText = adCounts[id];
+            if (adCounts[id] >= requiredAds) {
+                document.getElementById(`lock-${id}`).style.display = 'none';
+                document.getElementById(`link-${id}`).style.display = 'block';
+            }
+        }
+    </script>
 </body>
-  </html>
+    </html>
