@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Viral Movie Hub</title>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+    
+    <script src='//libtl.com/sdk.js' data-zone='10831174' data-sdk='show_10831174'></script>
+
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: linear-gradient(180deg, #0f0f17 0%, #1a1a2e 100%); color: white; margin: 0; padding: 15px; min-height: 100vh; }
+        .header { text-align: center; padding: 20px; background: rgba(255, 255, 255, 0.05); border-radius: 15px; backdrop-filter: blur(10px); margin-bottom: 25px; border: 1px solid rgba(255, 255, 255, 0.1); }
+        .header h2 { margin: 0; font-size: 1.6rem; color: #00d2ff; }
+        .movie-card { background: rgba(30, 30, 45, 0.95); border-radius: 16px; padding: 15px; margin-bottom: 20px; border: 1px solid rgba(0, 210, 255, 0.2); box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5); overflow: hidden; }
+        .movie-img { width: 100%; height: auto; border-radius: 12px; margin-bottom: 12px; object-fit: cover; }
+        .movie-title { font-size: 1.15rem; font-weight: bold; color: #ffffff; margin-bottom: 5px; }
+        .movie-type { display: inline-block; font-size: 0.75rem; background: #3a7bd5; padding: 4px 10px; border-radius: 20px; margin-bottom: 15px; }
+        .watch-btn { display: block; width: 100%; text-align: center; background: linear-gradient(135deg, #00c6ff 0%, #0072ff 100%); color: white; padding: 14px; border-radius: 10px; text-decoration: none; font-weight: bold; border: none; cursor: pointer; transition: 0.2s; }
+        .watch-btn:active { transform: scale(0.98); }
+        .unlock-txt { font-size: 0.85rem; color: #ffcc00; text-align: center; margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h2>🎬 Viral Movie Hub</h2>
+        <p style="color: #aaa; font-size: 0.8rem;">লেটেস্ট মুভি ও ড্রামা কালেকশন</p>
+    </div>
+
+    <div id="content-container">
+        </div>
+
+    <script>
+        // Firebase Configuration (পছন্দমতো আপনার ডাটা বসান)
+        const firebaseConfig = {
+            apiKey: "YOUR_API_KEY",
+            projectId: "YOUR_PROJECT_ID",
+            appId: "YOUR_APP_ID"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
+        const requiredAds = 5;
+        let adCounts = {}; 
+
+        // ডাটাবেজ থেকে মুভি নিয়ে আসা
+        db.collection("movies").orderBy("timestamp", "desc").onSnapshot((snapshot) => {
+            const container = document.getElementById('content-container');
+            container.innerHTML = "";
+            snapshot.forEach((doc) => {
+                const item = doc.data();
+                const id = doc.id;
+                adCounts[id] = 0;
+
+                container.innerHTML += `
+                    <div class="movie-card">
+                        ${item.image ? `<img src="${item.image}" class="movie-img" alt="Poster">` : ''}
+                        <div class="movie-title">${item.title}</div>
+                        <div class="movie-type">${item.category}</div>
+                        
+                        <div id="lock-${id}">
+                            <p class="unlock-txt">মুভিটি আনলক করতে ৫টি অ্যাড দেখুন</p>
+                            <button class="watch-btn" style="background:#444;" onclick="handleAdClick('${id}')">
+                                অ্যাড দেখুন (<span id="count-${id}">0</span>/${requiredAds})
+                            </button>
+                        </div>
+
+                        <div id="link-${id}" style="display:none;">
+                            <button class="watch-btn" onclick="window.open('${item.link}', '_blank')">🚀 এখনই দেখুন</button>
+                        </div>
+                    </div>
+                `;
+            });
+        });
+
+        function handleAdClick(id) {
+            // মনিট্যাগ SDK কল
+            if (typeof show_10831174 === 'function') {
+                show_10831174().then(() => {
+                    updateCounter(id);
+                });
+            } else {
+                updateCounter(id); 
+            }
+        }
+
+        function updateCounter(id) {
+            adCounts[id]++;
+            document.getElementById(`count-${id}`).innerText = adCounts[id];
+            if (adCounts[id] >= requiredAds) {
+                document.getElementById(`lock-${id}`).style.display = 'none';
+                document.getElementById(`link-${id}`).style.display = 'block';
+            }
+        }
+    </script>
+</body>
+    </html>
