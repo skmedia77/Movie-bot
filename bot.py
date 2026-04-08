@@ -2,15 +2,31 @@ import os
 import json
 import datetime
 import logging
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from telegram.ext import Application, CommandHandler, ContextTypes
 import firebase_admin
 from firebase_admin import credentials, firestore
 
-# লগার সেটআপ (এরর চেক করার জন্য)
+# লগার সেটআপ
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
-# Environment Variables থেকে ডাটা নেওয়া
+# --- Health Check Server (Render Error Fix) ---
+class HealthCheckHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"Bot is active and running!")
+
+def run_health_check():
+    # রেন্ডার অটোমেটিক একটি PORT এনভায়রনমেন্ট ভেরিয়েবল দেয়
+    port = int(os.environ.get("PORT", 8080))
+    server = HTTPServer(('0.0.0.0', port), HealthCheckHandler)
+    logging.info(f"Health check server started on port {port}")
+    server.serve_forever()
+
+# --- Environment Variables ---
 TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_ID", "0"))
 WEB_APP_URL = os.getenv("WEB_APP_URL")
@@ -23,11 +39,10 @@ try:
     firebase_admin.initialize_app(cred)
     db = firestore.client()
 except Exception as e:
-    print(f"Firebase Error: {e}")
+    logging.error(f"Firebase Error: {e}")
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    # ইউজার আইডি ডাটাবেজে সেভ
     db.collection("users").document(str(user.id)).set({
         "name": user.first_name,
         "username": user.username,
@@ -43,11 +58,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
-# পোস্ট ফরম্যাট: /post নাম | ক্যাটাগরি | মুভি লিঙ্ক | ইমেজ লিঙ্ক
 async def post(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ADMIN_ID:
-        return
-    
+    if update.effective_user.id != ADMIN_ID: return
     try:
         data = " ".join(context.args).split("|")
         title = data[0].strip()
@@ -62,20 +74,20 @@ async def post(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "image": image,
             "timestamp": datetime.datetime.now()
         })
-        await update.message.reply_text(f"✅ সফলভাবে সেভ হয়েছে:\n📌 নাম: {title}\n🖼️ ইমেজ: {'আছে' if image else 'নেই'}")
+        await update.message.reply_text(f"✅ সফলভাবে সেভ হয়েছে:\n📌 নাম: {title}")
     except:
         await update.message.reply_text("❌ ভুল ফরম্যাট!\nলিখুন: /post নাম | ক্যাটাগরি | লিঙ্ক | ইমেজ লিঙ্ক")
 
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID: return
     users = db.collection("users").get()
-    await update.message.reply_text(f"📊 আপনার বটের বর্তমান ইউজার: {len(users)} জন।")
+    await update.message.reply_text(f"📊 বর্তমান ইউজার: {len(users)} জন।")
 
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID: return
     text = " ".join(context.args)
     if not text:
-        await update.message.reply_text("মেসেজ দিন। উদা: /broadcast হ্যালো!")
+        await update.message.reply_text("মেসেজ দিন।")
         return
     
     users = db.collection("users").get()
@@ -85,16 +97,21 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await context.bot.send_message(chat_id=int(u.id), text=text)
             sent += 1
         except: pass
-    await update.message.reply_text(f"📢 {sent} জন ইউজারের কাছে পাঠানো হয়েছে।")
+    await update.message.reply_text(f"📢 {sent} জনের কাছে পাঠানো হয়েছে।")
 
 def main():
+    # ১. প্রথমে হেলথ চেক সার্ভারটি একটি আলাদা থ্রেডে চালু করি
+    threading.Thread(target=run_health_check, daemon=True).start()
+
+    # ২. বোট অ্যাপ্লিকেশন সেটআপ
     app = Application.builder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("post", post))
     app.add_handler(CommandHandler("status", status))
     app.add_handler(CommandHandler("broadcast", broadcast))
-    print("বটটি এখন সচল...")
+
+    logging.info("বটটি এখন সচল...")
     app.run_polling()
 
 if __name__ == "__main__":
-    main()
+    main()        
