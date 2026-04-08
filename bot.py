@@ -1,190 +1,209 @@
-import os
-import json
-import threading
-import asyncio
-from flask import Flask
-import firebase_admin
-from firebase_admin import credentials, db
-from telegram import (
-    InlineKeyboardButton, 
-    InlineKeyboardMarkup, 
-    Update, 
-    WebAppInfo, 
-    MenuButtonWebApp 
-)
-from telegram.constants import ParseMode 
-from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
-
-# ---------------- WEB SERVER (For Render) ----------------
-app = Flask(__name__)
-
-@app.route('/')
-def home():
-    return "Bot is Running Perfectly on Python 3.11!"
-
-def run_flask():
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port, debug=False, use_reloader=False)
-
-# ---------------- CONFIGURATION ----------------
-BOT_TOKEN = os.environ.get("BOT_TOKEN")
-ADMIN_ID = 6311806060  
-CHANNEL_USERNAME = "@viralmoviehubbd"
-APP_URL = os.environ.get("APP_URL") 
-MOVIE_APP_URL = "https://mediago99.github.io/Viral-Link01/"
-FIREBASE_DB_URL = "https://viralmoviehubbd-default-rtdb.firebaseio.com/"
-FIREBASE_CREDS = os.environ.get("FIREBASE_CREDENTIALS")
-
-# রেফারেল সংখ্যা
-REFERRAL_COUNT_NEEDED = 1 
-
-# ---------------- FIREBASE SETUP ----------------
-if not firebase_admin._apps:
-    try:
-        cred_dict = json.loads(FIREBASE_CREDS)
-        cred = credentials.Certificate(cred_dict)
-        firebase_admin.initialize_app(cred, {'databaseURL': FIREBASE_DB_URL})
-    except Exception as e:
-        print(f"Firebase Initialization Error: {e}")
-
-user_ref = db.reference('users')
-movie_ref = db.reference('movies')
-
-# ---------------- HELPERS ----------------
-async def is_subscribed(bot, user_id):
-    try:
-        member = await bot.get_chat_member(CHANNEL_USERNAME, user_id)
-        return member.status in ['member', 'administrator', 'creator']
-    except:
-        return False
-
-def progress_bar(count, total=REFERRAL_COUNT_NEEDED):
-    filled = "█" * min(count, total)
-    empty = "░" * max(0, total - count)
-    return f"[{filled}{empty}] {int((min(count, total)/total)*100)}%"
-
-# ---------------- HANDLERS ----------------
-
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = str(update.effective_user.id)
-    # ইউজার ডাটাবেজে না থাকলে সেভ করা এবং রেফারেল চেক করা
-    if not user_ref.child(user_id).get():
-        ref_by = context.args[0] if context.args else None
-        user_ref.child(user_id).set({"referrals": 0, "coins": 0, "ref_by": ref_by})
-        if ref_by and ref_by != user_id:
-            r = user_ref.child(ref_by).get() or {"referrals": 0, "coins": 0}
-            user_ref.child(ref_by).update({
-                "referrals": r.get("referrals", 0) + 1,
-                "coins": r.get("coins", 0) + 100
-            })
+    <!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Viral Movie Hub Premium</title>
     
-    # সাবস্ক্রিপশন চেক
-    if not await is_subscribed(context.bot, user_id):
-        kb = [[InlineKeyboardButton("📢 Join Channel", url=f"https://t.me/{CHANNEL_USERNAME[1:]}")],
-              [InlineKeyboardButton("✅ Joined", callback_data="check_join")]]
-        await update.message.reply_text("❌ মুভি দেখতে হলে আগে আমাদের চ্যানেলে জয়েন করুন।", reply_markup=InlineKeyboardMarkup(kb))
-    else:
-        kb = [[InlineKeyboardButton("🎬 Open Movie App", callback_data="open_app")]]
-        await update.message.reply_text("🎬 Viral Movie Hub এ স্বাগতম!", reply_markup=InlineKeyboardMarkup(kb))
-
-async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = str(update.effective_user.id)
-    user = user_ref.child(user_id).get() or {"referrals": 0, "coins": 0}
-    refs = user.get("referrals", 0)
-    bot_me = await context.bot.get_me()
-    text = f"📊 **আপনার স্ট্যাটাস**\n\n👥 মোট রেফার: {refs}/{REFERRAL_COUNT_NEEDED}\n📈 অগ্রগতি: {progress_bar(refs)}\n\n🔗 লিংক: `https://t.me/{bot_me.username}?start={user_id}`"
-    await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN)
-
-async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    user_id = str(update.effective_user.id)
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
     
-    if query.data == "check_join":
-        if await is_subscribed(context.bot, user_id):
-            await query.edit_message_text("✅ ধন্যবাদ! এখন মুভি অ্যাপ ওপেন করতে পারবেন।", 
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🎬 Open App", callback_data="open_app")]]))
-        else:
-            await query.answer("❌ আপনি এখনো জয়েন করেননি!", show_alert=True)
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
+    
+    <script src='//libtl.com/sdk.js' data-zone='10500197' data-sdk='show_10500197'></script>
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+
+    <style>
+        :root {
+            --bg-color: #0f102b;
+            --card-bg: #1a1b3d;
+            --accent-color: #a855f7;
+            --text-color: #ffffff;
+            --success-color: #22c55e;
+        }
+        body { 
+            background-color: var(--bg-color); 
+            color: var(--text-color); 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            margin: 0; 
+            padding-bottom: 30px; 
+            user-select: none;
+        }
+        .header { 
+            text-align: center; 
+            padding: 25px 15px; 
+            background: linear-gradient(180deg, var(--card-bg), var(--bg-color)); 
+            border-radius: 0 0 25px 25px; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.4); 
+        }
+        .header h1 { color: var(--accent-color); margin: 0; font-size: 24px; letter-spacing: 1px; }
+        
+        #movie-list { padding: 10px; }
+        
+        .movie-card { 
+            background: var(--card-bg); 
+            margin: 15px 0; 
+            border-radius: 20px; 
+            overflow: hidden; 
+            border: 1px solid rgba(255,255,255,0.08); 
+            box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+        }
+        .movie-card img { width: 100%; height: 220px; object-fit: cover; border-bottom: 2px solid var(--accent-color); }
+        .movie-info { padding: 15px; }
+        .movie-info h3 { margin: 0 0 12px 0; font-size: 18px; color: #efefff; }
+        
+        .unlock-btn { 
+            background: linear-gradient(90deg, #ff8a00, #e52e71); 
+            border: none; 
+            color: white; 
+            padding: 15px; 
+            width: 100%; 
+            border-radius: 12px; 
+            font-weight: bold; 
+            font-size: 15px;
+            cursor: pointer; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            gap: 10px; 
+            transition: transform 0.2s;
+        }
+        .unlock-btn:active { transform: scale(0.98); }
+        .unlock-btn:disabled { background: #444 !important; opacity: 0.8; cursor: not-allowed; }
+        
+        .watch-now { background: var(--success-color) !important; box-shadow: 0 0 15px rgba(34, 197, 94, 0.4); }
+
+        /* Progress Bar */
+        .progress-container { width: 100%; background: #000; height: 6px; border-radius: 10px; margin-top: 10px; overflow: hidden; }
+        .progress-bar { height: 100%; background: var(--accent-color); width: 0%; transition: width 0.3s; }
+    </style>
+</head>
+<body>
+
+<div id="home-page">
+    <div class="header">
+        <h1>VIRAL MOVIE HUB <i class="fa fa-play-circle"></i></h1>
+        <p style="font-size: 12px; opacity: 0.7; margin-top: 5px;">৫টি অ্যাড দেখুন এবং মুভি আনলক করুন</p>
+    </div>
+    <div id="movie-list">
+        </div>
+</div>
+
+<script>
+// Telegram WebApp Setup
+const tg = window.Telegram.WebApp;
+tg.expand();
+
+// Firebase Configuration
+const firebaseConfig = { 
+    databaseURL: "https://viralmoviehubbd-default-rtdb.firebaseio.com/" 
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
+// Monetag SmartLink
+const MONETAG_SMARTLINK = "https://omg10.com/4/10611800";
+
+// Local Storage থেকে ইউজারের প্রগ্রেস লোড করা
+let adProgress = JSON.parse(localStorage.getItem('user_ad_progress')) || {};
+
+function loadMovies() {
+    db.ref('movies').on('value', (snapshot) => {
+        const list = document.getElementById('movie-list');
+        list.innerHTML = '';
+        
+        if (!snapshot.exists()) {
+            list.innerHTML = '<p style="text-align:center; margin-top:50px; opacity:0.5;">কোনো মুভি পাওয়া যায়নি!</p>';
+            return;
+        }
+
+        snapshot.forEach((child) => {
+            const movie = child.val();
+            const id = child.key;
             
-    elif query.data == "open_app":
-        user = user_ref.child(user_id).get() or {}
-        refs = user.get("referrals", 0)
-        if refs < REFERRAL_COUNT_NEEDED:
-            await query.edit_message_text(f"🔒 {REFERRAL_COUNT_NEEDED} জন রেফার লাগবে। আপনার আছে: {refs}/{REFERRAL_COUNT_NEEDED}\n{progress_bar(refs)}", parse_mode=ParseMode.MARKDOWN)
-        else:
-            kb = [[InlineKeyboardButton("🚀 Launch Mini App", web_app=WebAppInfo(url=APP_URL))]]
-            await query.edit_message_text("✅ রেফার পূর্ণ হয়েছে! নিচের বাটনে ক্লিক করুন:", reply_markup=InlineKeyboardMarkup(kb))
-
-# সংশোধিত ব্রডকাস্ট: ইন-একটিভ ইউজারদের ফায়ারবেজ থেকে ডিলিট করবে
-async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ADMIN_ID: return
-    if not update.message.reply_to_message:
-        await update.message.reply_text("❌ যেকোনো মেসেজের ওপর রিপ্লাই দিয়ে /broadcast লিখুন।")
-        return
-
-    reply_msg = update.message.reply_to_message
-    all_users = user_ref.get() or {}
-    total_users = len(all_users)
-    status_msg = await update.message.reply_text(f"⏳ ব্রডকাস্ট শুরু... মোট ইউজার: {total_users}")
-    
-    success, removed = 0, 0
-    for uid in all_users:
-        try:
-            await context.bot.copy_message(chat_id=uid, from_chat_id=reply_msg.chat.id, message_id=reply_msg.message_id)
-            success += 1
-            await asyncio.sleep(0.05) # ফ্লাড কন্ট্রোল
-        except:
-            # যদি মেসেজ না যায়, ফায়ারবেজ থেকে ডিলিট করা হচ্ছে
-            user_ref.child(str(uid)).delete()
-            removed += 1
+            if(!adProgress[id]) adProgress[id] = 0;
             
-    await status_msg.edit_text(
-        f"✅ সম্পন্ন!\n\n🚀 সফল (অ্যাক্টিভ): {success}\n🗑 ডিলিট করা হয়েছে (ইনঅ্যাক্টিভ): {removed}\n📊 বর্তমানে ডাটাবেজে আছে: {total_users - removed}"
-    )
+            const isUnlocked = adProgress[id] >= 5;
+            const btnText = isUnlocked ? "🎬 WATCH NOW" : `🔓 UNLOCK (${adProgress[id]}/5 ADS)`;
+            const btnClass = isUnlocked ? "unlock-btn watch-now" : "unlock-btn";
+            const progressWidth = (adProgress[id] / 5) * 100;
 
-async def post(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ADMIN_ID: return
-    data = [i.strip() for i in " ".join(context.args).split("|")]
-    if len(data) < 3:
-        await update.message.reply_text("❌ ফরম্যাট: /post নাম | ইমেজ URL | মুভি লিঙ্ক")
-        return
+            list.innerHTML += `
+            <div class="movie-card">
+                <img src="${movie.image_url || 'https://via.placeholder.com/400x220'}" alt="Poster"> 
+                <div class="movie-info">
+                    <h3>${movie.title}</h3>
+                    <div class="progress-container">
+                        <div class="progress-bar" style="width: ${progressWidth}%"></div>
+                    </div>
+                    <p style="font-size:11px; margin: 5px 0 15px 0; opacity:0.6;">প্রগ্রেস: ${adProgress[id]} / 5 অ্যাড</p>
+                    <button class="${btnClass}" onclick="handleUnlock('${id}', '${movie.video_url}')" id="btn-${id}">
+                        ${btnText}
+                    </button>
+                </div>
+            </div>`;
+        });
+    });
+}
 
-    movie_name, image_url, movie_link = data[0], data[1], data[2]
-    movie_ref.push({"title": movie_name, "image_url": image_url, "video_url": movie_link})
+async function handleUnlock(id, url) {
+    const btn = document.getElementById(`btn-${id}`);
     
-    bot_me = await context.bot.get_me()
-    kb = [[InlineKeyboardButton("🎬 Watch Movie", url=f"https://t.me/{bot_me.username}")]]
-    await context.bot.send_photo(chat_id=CHANNEL_USERNAME, photo=image_url, caption=f"🎬 **{movie_name}**\n\nমুভিটি দেখতে নিচের বাটনে ক্লিক করুন।", reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN)
-    await update.message.reply_text("✅ পোস্ট সফল! সবাইকে পাঠাতে রিপ্লাই দিয়ে /broadcast লিখুন।")
+    // যদি ৫টি অ্যাড দেখা হয়ে যায়
+    if(adProgress[id] >= 5) {
+        // সরাসরি মুভি লিঙ্কে পাঠিয়ে দেওয়া (অরিজিনাল কন্টেন্ট)
+        window.location.href = url;
+        return;
+    }
 
-# সংশোধিত অ্যাডমিন রিপোর্ট কমান্ড
-async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ADMIN_ID: return
-    u = len(user_ref.get() or {})
-    m = len(movie_ref.get() or {})
-    await update.message.reply_text(f"📊 **রিপোর্ট**\n👤 মোট অ্যাক্টিভ ইউজার: {u}\n🎬 মোট মুভি: {m}")
+    // অ্যাড দেখানোর প্রক্রিয়া শুরু
+    btn.disabled = true;
+    
+    // ১. Monetag অ্যাড ওপেন করা
+    if (typeof show_10500197 === 'function') {
+        show_10500197().catch(() => {
+            window.open(MONETAG_SMARTLINK, '_blank');
+        });
+    } else {
+        window.open(MONETAG_SMARTLINK, '_blank');
+    }
 
-async def post_init(application):
-    try:
-        await application.bot.set_chat_menu_button(menu_button=MenuButtonWebApp(text="ভিডিও দেখুন", web_app=WebAppInfo(url=MOVIE_APP_URL)))
-    except:
-        pass
+    // ২. ১৫ সেকেন্ডের ওয়েটিং টাইম (যাতে অ্যাড লোড হয় এবং ইনকাম হয়)
+    let timeLeft = 15;
+    const originalText = btn.innerHTML;
+    
+    const countdown = setInterval(() => {
+        timeLeft--;
+        btn.innerHTML = `<i class="fa fa-spinner fa-spin"></i> ভেরিফাই হচ্ছে... ${timeLeft}s`;
+        
+        if(timeLeft <= 0) {
+            clearInterval(countdown);
+            
+            // প্রগ্রেস আপডেট
+            adProgress[id]++;
+            localStorage.setItem('user_ad_progress', JSON.stringify(adProgress));
+            
+            // বাটন রিসেট
+            btn.disabled = false;
+            loadMovies(); // UI আপডেট করার জন্য পুনরায় লোড
+            
+            // ইউজারকে মেসেজ দেওয়া
+            tg.HapticFeedback.notificationOccurred('success');
+        }
+    }, 1000);
+}
 
-# ---------------- RUN BOT ----------------
-if __name__ == "__main__":
-    # Flask সার্ভার স্টার্ট
-    threading.Thread(target=run_flask, daemon=True).start()
+// ইনিশিয়াল লোড
+window.onload = () => {
+    loadMovies();
     
-    # টেলিগ্রাম অ্যাপ্লিকেশন স্টার্ট
-    application = ApplicationBuilder().token(BOT_TOKEN).post_init(post_init).build()
-    
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("status", status))
-    application.add_handler(CommandHandler("post", post))
-    application.add_handler(CommandHandler("users", admin_stats)) # /users কমান্ড ঠিক করা হলো
-    application.add_handler(CommandHandler("broadcast", broadcast))
-    application.add_handler(CallbackQueryHandler(button_handler))
-    
-    print("Bot is Live on Python 3.11...")
-    application.run_polling(drop_pending_updates=True)
+    // অ্যাপ খোলার ৩ সেকেন্ড পর একটি অটো অ্যাড (Interstitial) ট্রাই করা
+    setTimeout(() => {
+        if(typeof show_10500197 === 'function') show_10500197();
+    }, 30000);
+};
+
+</script>
+</body>
+</html>
