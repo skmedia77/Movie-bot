@@ -32,7 +32,7 @@ ADMIN_ID =  7396254196
 CHANNEL_USERNAME = "@skkmediabd"
 APP_URL = os.environ.get("APP_URL") 
 MOVIE_APP_URL = "https://skmedia77.github.io/Movie-bot/"
-FIREBASE_DB_URL = "https://viralmoviehubbd-default-rtdb.firebaseio.com/"
+FIREBASE_DB_URL = "https://skmedia-146ca-default-rtdb.asia-southeast1.firebasedatabase.app"
 FIREBASE_CREDS = os.environ.get("FIREBASE_CREDENTIALS")
 
 # রেফারেল সংখ্যা
