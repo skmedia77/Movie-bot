@@ -171,20 +171,24 @@ async def post_init(application):
     except:
         pass
 
-# ---------------- RUN BOT ----------------
+ # ---------------- RUN BOT (Render Optimized) ----------------
 if __name__ == "__main__":
-    # Flask সার্ভার স্টার্ট
-    threading.Thread(target=run_flask, daemon=True).start()
+    # ১. প্রথমে Flask সার্ভারকে আলাদা থ্রেডে চালু করা
+    flask_thread = threading.Thread(target=run_flask, daemon=True)
+    flask_thread.start()
     
-    # টেলিগ্রাম অ্যাপ্লিকেশন স্টার্ট
+    # ২. টেলিগ্রাম অ্যাপ্লিকেশন তৈরি করা
     application = ApplicationBuilder().token(BOT_TOKEN).post_init(post_init).build()
     
+    # ৩. হ্যান্ডলারগুলো যোগ করা
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("status", status))
     application.add_handler(CommandHandler("post", post))
-    application.add_handler(CommandHandler("users", admin_stats)) # /users কমান্ড ঠিক করা হলো
+    application.add_handler(CommandHandler("users", admin_stats))
     application.add_handler(CommandHandler("broadcast", broadcast))
     application.add_handler(CallbackQueryHandler(button_handler))
     
-    print("Bot is Live on Python 3.11...")
+    print("Bot & Web Server starting...")
+
+    # ৪. পোলিং রান করা
     application.run_polling(drop_pending_updates=True)
