@@ -6,10 +6,8 @@
     <title>Viral Movie Hub Premium</title>
     
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
-    
     <script src='//libtl.com/sdk.js' data-zone='10831174' data-sdk='show_10831174'></script>
     
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
@@ -39,7 +37,7 @@
         }
         .header h1 { color: var(--accent-color); margin: 0; font-size: 24px; letter-spacing: 1px; }
         
-        #movie-list { padding: 10px; }
+        #movie-list { padding: 10px; min-height: 200px; }
         
         .movie-card { 
             background: var(--card-bg); 
@@ -74,9 +72,10 @@
         
         .watch-now { background: var(--success-color) !important; box-shadow: 0 0 15px rgba(34, 197, 94, 0.4); }
 
-        /* Progress Bar */
         .progress-container { width: 100%; background: #000; height: 6px; border-radius: 10px; margin-top: 10px; overflow: hidden; }
         .progress-bar { height: 100%; background: var(--accent-color); width: 0%; transition: width 0.3s; }
+        
+        .loading-text { text-align: center; margin-top: 50px; opacity: 0.6; }
     </style>
 </head>
 <body>
@@ -87,7 +86,8 @@
         <p style="font-size: 12px; opacity: 0.7; margin-top: 5px;">৫টি অ্যাড দেখুন এবং মুভি আনলক করুন</p>
     </div>
     <div id="movie-list">
-        </div>
+        <p class="loading-text">মুভি লিস্ট লোড হচ্ছে...</p>
+    </div>
 </div>
 
 <script>
@@ -99,22 +99,27 @@ tg.expand();
 const firebaseConfig = { 
     databaseURL: "https://skmedia-146ca-default-rtdb.asia-southeast1.firebasedatabase.app" 
 };
-firebase.initializeApp(firebaseConfig);
+
+// Initialize Firebase
+if (!firebase.apps.length) {
+    firebase.initializeApp(firebaseConfig);
+}
 const db = firebase.database();
 
 // Monetag SmartLink
 const MONETAG_SMARTLINK = "https://omg10.com/4/10611800";
 
-// Local Storage থেকে ইউজারের প্রগ্রেস লোড করা
+// Local Storage Progress
 let adProgress = JSON.parse(localStorage.getItem('user_ad_progress')) || {};
 
 function loadMovies() {
+    const list = document.getElementById('movie-list');
+    
     db.ref('movies').on('value', (snapshot) => {
-        const list = document.getElementById('movie-list');
         list.innerHTML = '';
         
         if (!snapshot.exists()) {
-            list.innerHTML = '<p style="text-align:center; margin-top:50px; opacity:0.5;">কোনো মুভি পাওয়া যায়নি!</p>';
+            list.innerHTML = '<p class="loading-text">কোনো মুভি পাওয়া যায়নি!</p>';
             return;
         }
 
@@ -129,7 +134,7 @@ function loadMovies() {
             const btnClass = isUnlocked ? "unlock-btn watch-now" : "unlock-btn";
             const progressWidth = (adProgress[id] / 5) * 100;
 
-            list.innerHTML += `
+            const card = `
             <div class="movie-card">
                 <img src="${movie.image_url || 'https://via.placeholder.com/400x220'}" alt="Poster"> 
                 <div class="movie-info">
@@ -143,24 +148,24 @@ function loadMovies() {
                     </button>
                 </div>
             </div>`;
+            list.innerHTML += card;
         });
+    }, (error) => {
+        list.innerHTML = `<p class="loading-text">Error: ${error.message}</p>`;
     });
 }
 
 async function handleUnlock(id, url) {
     const btn = document.getElementById(`btn-${id}`);
     
-    // যদি ৫টি অ্যাড দেখা হয়ে যায়
     if(adProgress[id] >= 5) {
-        // সরাসরি মুভি লিঙ্কে পাঠিয়ে দেওয়া (অরিজিনাল কন্টেন্ট)
         window.location.href = url;
         return;
     }
 
-    // অ্যাড দেখানোর প্রক্রিয়া শুরু
     btn.disabled = true;
     
-    // ১. Monetag অ্যাড ওপেন করা
+    // Monetag Ad Trigger
     if (typeof show_10831174 === 'function') {
         show_10831174().catch(() => {
             window.open(MONETAG_SMARTLINK, '_blank');
@@ -169,41 +174,36 @@ async function handleUnlock(id, url) {
         window.open(MONETAG_SMARTLINK, '_blank');
     }
 
-    // ২. ১৫ সেকেন্ডের ওয়েটিং টাইম (যাতে অ্যাড লোড হয় এবং ইনকাম হয়)
     let timeLeft = 15;
-    const originalText = btn.innerHTML;
-    
-    const countdown = setInterval(() => {
+    const timer = setInterval(() => {
         timeLeft--;
         btn.innerHTML = `<i class="fa fa-spinner fa-spin"></i> ভেরিফাই হচ্ছে... ${timeLeft}s`;
         
         if(timeLeft <= 0) {
-            clearInterval(countdown);
+            clearInterval(timer);
             
-            // প্রগ্রেস আপডেট
+            // Update Progress
             adProgress[id]++;
             localStorage.setItem('user_ad_progress', JSON.stringify(adProgress));
             
-            // বাটন রিসেট
             btn.disabled = false;
-            loadMovies(); // UI আপডেট করার জন্য পুনরায় লোড
+            loadMovies(); // Refresh UI
             
-            // ইউজারকে মেসেজ দেওয়া
-            tg.HapticFeedback.notificationOccurred('success');
+            if(tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
         }
     }, 1000);
 }
 
-// ইনিশিয়াল লোড
-window.onload = () => 
+// Initial Load
+window.onload = function() {
     loadMovies();
     
-    // অ্যাপ খোলার ৩ সেকেন্ড পর একটি অটো অ্যাড (Interstitial) ট্রাই করা
+    // Auto Interstitial Ad after 30s
     setTimeout(() => {
         if(typeof show_10831174 === 'function') show_10831174();
     }, 30000);
 };
-
 </script>
+
 </body>
 </html>
