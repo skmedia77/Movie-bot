@@ -30,8 +30,7 @@ def run_flask():
 # ---------------- CONFIGURATION ----------------
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 ADMIN_ID = 7396254196
-CHANNEL_USERNAME =[ "@skkmediabd",
-                   "@pornstargroup01"]
+CHANNEL_USERNAME ="@skkmediabd","@pornstargroup01"
 # এনভায়রনমেন্টে WEB_APP_URL বা APP_URL যা-ই থাকুক তা খুঁজে নেবে
 APP_URL = os.environ.get("WEB_APP_URL") or os.environ.get("APP_URL")
 MOVIE_APP_URL = "https://skmedia77.github.io/Movie-bot/"
